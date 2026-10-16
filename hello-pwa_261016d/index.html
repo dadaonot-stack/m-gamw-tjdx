@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="自己管理">
+<title>自己管理 Hello World</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root{--main:#121212;--acc:#4a0707;--sub:#f5f1f1;--line:#e8e2e2;--mute:#8b8484}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--main);font:14px/1.7 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;padding:calc(28px + env(safe-area-inset-top)) 22px calc(40px + env(safe-area-inset-bottom))}
+main{max-width:520px;margin:0 auto}
+h1{font-size:26px;letter-spacing:.06em;margin:0 0 2px}
+.d{color:var(--mute);font-size:12px;letter-spacing:.1em}
+.card{background:var(--sub);border-radius:20px;padding:6px 18px;margin:22px 0;box-shadow:6px 6px 14px rgba(0,0,0,.06),-6px -6px 14px rgba(255,255,255,.95)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border:0}
+.row b{font-weight:500}
+.ok{color:var(--main)}.ok::before{content:"✓ ";color:var(--acc)}
+.no{color:var(--mute)}.no::before{content:"－ "}
+button{font:inherit;background:var(--main);color:#fff;border:0;border-radius:14px;padding:12px 20px;margin:4px 8px 4px 0}
+button.g{background:#fff;color:var(--main);border:1px solid var(--line)}
+p.n{color:var(--mute);font-size:12px;margin:6px 0}
+#msg{min-height:1.7em;font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<div class="d" id="now"></div>
+<h1>Hello World</h1>
+<p class="n">自己管理アプリの、ホーム画面に追加できるかを確認するための試作です。下の項目を見てください。</p>
+<div class="card">
+  <div class="row"><b>1. この画面が表示されている</b><span class="ok">OK</span></div>
+  <div class="row"><b>2. ホーム画面から開いている</b><span id="c-standalone"></span></div>
+  <div class="row"><b>3. 保存が残っている</b><span id="c-count"></span></div>
+  <div class="row"><b>4. オフライン用の準備</b><span id="c-sw"></span></div>
+  <div class="row"><b>5. ネットにつながっている</b><span id="c-online"></span></div>
+  <div class="row"><b>6. オフライン用の仕組みで表示中</b><span id="c-ctl"></span></div>
+</div>
+<div class="card" style="padding:16px 18px">
+  <b>ファイルの書き出しテスト</b>
+  <p class="n">本体のバックアップ書き出しに使う方法を、先に確かめます。押すと、確認用の小さなテキストができます。</p>
+  <button id="b-dl">ふつうに保存</button><button id="b-share" class="g">共有メニューで保存</button>
+  <div id="msg"></div>
+</div>
+<p class="n" id="ua"></p>
+</main>
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  const set=(id,ok,t)=>{const e=$(id);e.className=ok?'ok':'no';e.textContent=t};
+  const n=new Date();
+  $('#now').textContent=n.getFullYear()+'/'+(n.getMonth()+1)+'/'+n.getDate()+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  const sa=window.navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
+  set('#c-standalone',sa,sa?'はい(ホーム画面から)':'いいえ(ブラウザで開いています)');
+  try{
+    const c=(Number(localStorage.getItem('hello.count'))||0)+1;localStorage.setItem('hello.count',c);
+    if(!localStorage.getItem('hello.first'))localStorage.setItem('hello.first',n.toISOString());
+    const f=new Date(localStorage.getItem('hello.first'));
+    set('#c-count',true,c+'回目('+f.getFullYear()+'/'+(f.getMonth()+1)+'/'+f.getDate()+' から)');
+  }catch(e){set('#c-count',false,'保存できません')}
+  const on=()=>set('#c-online',navigator.onLine,navigator.onLine?'はい':'いいえ(オフライン)');
+  on();addEventListener('online',on);addEventListener('offline',on);
+  const FILES=['index.html','manifest.webmanifest','sw.js','icon-180.png','icon-192.png','icon-512.png','icon-512-maskable.png'];
+  const STATE={installing:'インストール中…',installed:'インストール済み(有効化待ち)',activating:'有効化中…',activated:'準備できました',redundant:'失敗(インストールが途中で止まりました)'};
+  async function missing(){const bad=[];for(const f of FILES){try{const r=await fetch(f,{cache:'no-store'});if(!r.ok)bad.push(f+'('+r.status+')')}catch(e){bad.push(f+'(通信できません)')}}return bad}
+  async function diag(reg){
+    const w=reg&&(reg.installing||reg.waiting||reg.active);const st=w?w.state:'なし';
+    if(st==='activated')return;
+    if(!navigator.onLine){set('#c-sw',false,'未準備(オフラインのため原因を調べられません)');return}
+    const bad=await missing();
+    set('#c-sw',false,(STATE[st]||st)+(bad.length?' / 取得できないファイル: '+bad.join(', '):' / ファイルは全部取得できます。少し待って再読み込みしてください'));
+  }
+  const ctl=()=>set('#c-ctl',!!(navigator.serviceWorker&&navigator.serviceWorker.controller),navigator.serviceWorker&&navigator.serviceWorker.controller?'はい':'いいえ');
+  ctl();
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.addEventListener('controllerchange',ctl);
+    navigator.serviceWorker.getRegistration().then(r0=>{
+      if(r0&&r0.active&&r0.active.state==='activated')set('#c-sw',true,'準備できました');
+      return navigator.serviceWorker.register('./sw.js').then(reg=>{
+        const upd=()=>{const w=reg.installing||reg.waiting||reg.active;if(!w)return;if(w.state==='activated')set('#c-sw',true,'準備できました');else{$('#c-sw').className='no';$('#c-sw').textContent=STATE[w.state]||w.state;w.addEventListener('statechange',upd)}};
+        upd();setTimeout(()=>diag(reg),9000);
+      });
+    }).catch(e=>{
+      navigator.serviceWorker.getRegistration().then(r=>{
+        if(r&&r.active&&r.active.state==='activated')set('#c-sw',true,'準備できています(いまは通信なし)');
+        else set('#c-sw',false,(navigator.onLine?'登録できません: ':'未準備(オフライン): ')+e.message);
+      });
+    });
+  }else set('#c-sw',false,'この環境では使えません');
+  const mk=()=>new File(['自己管理 書き出しテスト\n'+n.toISOString()+'\n'],'jikokanri-test.txt',{type:'text/plain'});
+  $('#b-dl').onclick=()=>{try{const f=mk(),a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href)},1000);$('#msg').textContent='保存を実行しました。ファイルが保存された/開いたか確認してください。'}catch(e){$('#msg').textContent='失敗: '+e.message}};
+  $('#b-share').onclick=async()=>{try{const f=mk();if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'書き出しテスト'});$('#msg').textContent='共有メニューを使えました。'}else $('#msg').textContent='この環境では共有メニューでのファイル保存は使えません。'}catch(e){$('#msg').textContent=e.name==='AbortError'?'キャンセルしました。':'失敗: '+e.message}};
+  $('#ua').textContent=navigator.userAgent;
+})();
+</script>
+</body>
+</html>
